@@ -1,11 +1,20 @@
 package org.opencv.samples.imagemanipulations;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
@@ -118,7 +127,7 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 	public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
 		Mat rgba = inputFrame.rgba();
 		Size sizeRgba = rgba.size();
-
+		Mat grayInnerWindow1;
 		Mat rgbaInnerWindow;
 
 		int rows = (int) sizeRgba.height;
@@ -135,49 +144,65 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 			break;
 
 		case CameraActivity.VIEW_MODE_Recognition:
-			Mat gray1 = inputFrame.gray();
-			Mat grayInnerWindow1 = gray1.submat(top, top + height, left, left + width);
+			
 			rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
+			
+			ArrayList<Mat> channels = new ArrayList<Mat>(3);
 
-			rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
+			Core.split(rgbaInnerWindow, channels);
 
-			Imgproc.adaptiveThreshold(grayInnerWindow1, src, 120, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY,
-					15, 7);
-
-			// Imgproc.threshold(src, src, 128, 255, Imgproc.THRESH_BINARY |
-			// Imgproc.THRESH_OTSU);
-
-			Imgproc.medianBlur(src, src, 3);
-			/*
-			 * Mat srcClose = new Mat(); Mat srcOpen = new Mat();
-			 */
-			Imgproc.erode(src, src, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(5, 5)));
-			/*
-			 * Imgproc.dilate(src, srcOpen,
-			 * Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3,
-			 * 3))); Core.absdiff(srcClose, srcOpen, src);
-			 */
+			Mat r = channels.get(0);
+			Mat g = channels.get(1);
+			Mat b = channels.get(2);
 
 			/*
-			 * List<MatOfPoint>contours= new ArrayList<MatOfPoint>();
-			 * Imgproc.findContours(src, contours, new Mat(), Imgproc.RETR_LIST,
-			 * Imgproc.CHAIN_APPROX_SIMPLE); Mat hierarchy = new Mat(); // find
-			 * contours: Imgproc.findContours(src, contours, hierarchy,
-			 * Imgproc.RETR_TREE,Imgproc.CHAIN_APPROX_SIMPLE); for (int
-			 * contourIdx = 0; contourIdx < contours.size(); contourIdx++) {
-			 * Imgproc.drawContours(rgbInnerWindow1, contours, contourIdx, new
-			 * Scalar(0, 0, 255), -1); }
-			 */
+			channels.set(0, r);
+			channels.set(1, g);
+			channels.set(2, b);
+			*/
 
-			/*
-			 * Core.convertScaleAbs(src, src, 10, 0); Imgproc.cvtColor(src,
-			 * rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
-			 * grayInnerWindow1.release(); rgbaInnerWindow.release();
-			 */
+			Imgproc.threshold(r, r, 90, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			Imgproc.threshold(g, g, 0, 70, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			Imgproc.threshold(b, b, 0, 70, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
 
-			Core.convertScaleAbs(src, src, 10, 0);
-			Imgproc.cvtColor(src, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
-			grayInnerWindow1.release();
+			Mat src1 = rgbaInnerWindow;
+
+			Core.merge(channels, src1);
+
+			Imgproc.medianBlur(src1, src1, 5);
+
+			Imgproc.cvtColor(src1, src1, Imgproc.COLOR_RGB2GRAY);
+			
+			Imgproc.threshold(src1, src1, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			
+			List<MatOfPoint>contours= new ArrayList<MatOfPoint>();
+		    Mat hierarchy = new Mat();
+		    
+		    Imgproc.findContours(src1, contours, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE, new Point(0, 0));
+		
+		    for ( int contourIdx=0; contourIdx < contours.size(); contourIdx++ )
+		    {
+		        // Minimum size allowed for consideration
+		        MatOfPoint2f approxCurve = new MatOfPoint2f();
+		        MatOfPoint2f contour2f = new MatOfPoint2f( contours.get(contourIdx).toArray() );
+		        //Processing on mMOP2f1 which is in type MatOfPoint2f
+		        double approxDistance = Imgproc.arcLength(contour2f, true)*0.02;
+		        Imgproc.approxPolyDP(contour2f, approxCurve, approxDistance, true);
+
+		        //Convert back to MatOfPoint
+		        MatOfPoint points = new MatOfPoint( approxCurve.toArray() );
+
+		        // Get bounding rect of contour
+		        Rect rect = Imgproc.boundingRect(points);
+
+		        Core.rectangle(src1, new Point(rect.x, rect.y), new Point(rect.x + rect.width, rect.y + rect.height), new Scalar(255, 0, 0, 255), 3);
+			
+		    }
+			
+			Core.convertScaleAbs(src1, rgbaInnerWindow, 10, 0);
+			//Imgproc.cvtColor(src1, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
+		
+			//grayInnerWindow1.release();
 			rgbaInnerWindow.release();
 			break;
 		}
