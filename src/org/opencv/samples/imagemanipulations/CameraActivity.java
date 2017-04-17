@@ -146,39 +146,40 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 		case CameraActivity.VIEW_MODE_Recognition:
 			
 			rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
+			Mat gray1 = inputFrame.gray();
+			grayInnerWindow1 = gray1.submat(top, top + height, left, left + width);
 			
 			ArrayList<Mat> channels = new ArrayList<Mat>(3);
-
+			
+			Mat src1= Mat.zeros(rgbaInnerWindow.size(),CvType.CV_8UC3);
+			
 			Core.split(rgbaInnerWindow, channels);
 
-			Mat r = channels.get(0);
-			Mat g = channels.get(1);
-			Mat b = channels.get(2);
-
-			/*
-			channels.set(0, r);
-			channels.set(1, g);
-			channels.set(2, b);
-			*/
-
-			Imgproc.threshold(r, r, 90, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
-			Imgproc.threshold(g, g, 0, 70, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			Mat b = channels.get(0);
 			Imgproc.threshold(b, b, 0, 70, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
-
-			Mat src1 = rgbaInnerWindow;
+			Mat g = channels.get(1);
+			Imgproc.threshold(g, g, 0, 70, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			Mat r = channels.get(2);
+			Imgproc.threshold(r, r, 90, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
 
 			Core.merge(channels, src1);
+			Imgproc.medianBlur(src1, src1, 3);
 
-			Imgproc.medianBlur(src1, src1, 5);
-
-			Imgproc.cvtColor(src1, src1, Imgproc.COLOR_RGB2GRAY);
+			//Mat crop = Mat.zeros(rgbaInnerWindow.size(),CvType.CV_8UC1);
 			
-			Imgproc.threshold(src1, src1, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+	
+			
+			
+			Imgproc.cvtColor(src1,grayInnerWindow1, Imgproc.COLOR_BGR2GRAY);
+			//Imgproc.threshold(grayInnerWindow1,grayInnerWindow1,0, 255, Imgproc.THRESH_BINARY);
+			
+			//Imgproc.threshold(grayInnerWindow1,grayInnerWindow1, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+
+			//Imgproc.Canny(src1, src1, 0, 255);
 			
 			List<MatOfPoint>contours= new ArrayList<MatOfPoint>();
 		    Mat hierarchy = new Mat();
-		    
-		    Imgproc.findContours(src1, contours, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE, new Point(0, 0));
+		     Imgproc.findContours(grayInnerWindow1, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 		
 		    for ( int contourIdx=0; contourIdx < contours.size(); contourIdx++ )
 		    {
@@ -186,23 +187,27 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 		        MatOfPoint2f approxCurve = new MatOfPoint2f();
 		        MatOfPoint2f contour2f = new MatOfPoint2f( contours.get(contourIdx).toArray() );
 		        //Processing on mMOP2f1 which is in type MatOfPoint2f
-		        double approxDistance = Imgproc.arcLength(contour2f, true)*0.02;
+		        double approxDistance = Imgproc.arcLength(contour2f, true)*0.02;//0.02
 		        Imgproc.approxPolyDP(contour2f, approxCurve, approxDistance, true);
 
 		        //Convert back to MatOfPoint
 		        MatOfPoint points = new MatOfPoint( approxCurve.toArray() );
-
+		       // Imgproc.drawContours(rgbaInnerWindow, contours, contourIdx, new Scalar(0,255,0));
 		        // Get bounding rect of contour
 		        Rect rect = Imgproc.boundingRect(points);
-
-		        Core.rectangle(src1, new Point(rect.x, rect.y), new Point(rect.x + rect.width, rect.y + rect.height), new Scalar(255, 0, 0, 255), 3);
-			
+		        double a = Imgproc.contourArea(contours.get(contourIdx));
+		        System.out.println(rect.height);
+		      // 
+		       
+				if (a >2000 && a < 8000) {
+		        Core.rectangle(rgbaInnerWindow, new Point(rect.x, rect.y), new Point(rect.x + rect.width, rect.y + rect.height)
+		        		, new Scalar(0,0,255), 3);//3
+				}
 		    }
-			
-			Core.convertScaleAbs(src1, rgbaInnerWindow, 10, 0);
+			//Core.convertScaleAbs(src1, rgbaInnerWindow, 10, 0);
 			//Imgproc.cvtColor(src1, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
-		
-			//grayInnerWindow1.release();
+
+			grayInnerWindow1.release();
 			rgbaInnerWindow.release();
 			break;
 		}
