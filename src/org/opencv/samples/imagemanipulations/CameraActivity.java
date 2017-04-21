@@ -42,6 +42,8 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 
 	public static int viewMode = VIEW_MODE_RGBA;
 
+	// Initializing OpenCV
+
 	private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
 		@Override
 		public void onManagerConnected(int status) {
@@ -63,7 +65,7 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 		Log.i(TAG, "Instantiated new " + this.getClass());
 	}
 
-	/** Called when the activity is first created. */
+	/* Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		Log.i(TAG, "called onCreate");
@@ -86,6 +88,7 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 	@Override
 	public void onResume() {
 		super.onResume();
+		// setting up OpenCV version - IMPORTANT to be CORRECT!
 		OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_10, this, mLoaderCallback);
 	}
 
@@ -103,6 +106,7 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 		return true;
 	}
 
+	// Menu activated with Android "more options" button
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
 		Log.i(TAG, "called onOptionsItemSelected; selected item: " + item);
@@ -113,105 +117,82 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 		return true;
 	}
 
+	// initialize image
 	public void onCameraViewStarted(int width, int height) {
 		src = new Mat();
 	}
 
+	// Explicitly deallocate Mats
 	public void onCameraViewStopped() {
-		// Explicitly deallocate Mats
 		if (src != null)
 			src.release();
 		src = null;
 	}
 
 	public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+
 		Mat rgba = inputFrame.rgba();
-		Size sizeRgba = rgba.size();
-		Mat grayInnerWindow1;
-		Mat rgbaInnerWindow;
+		Mat gray1 = inputFrame.gray();
 
-		int rows = (int) sizeRgba.height;
-		int cols = (int) sizeRgba.width;
+		ArrayList<Mat> channels = new ArrayList<Mat>(3);
 
-		int left = cols / 8;
-		int top = rows / 8;
+		Mat src1 = Mat.zeros(rgba.size(), CvType.CV_8UC3);
+		List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
+		Mat hierarchy = new Mat();
 
-		int width = cols * 3 / 4;
-		int height = rows * 3 / 4;
+		double ratio = 0;
+		// Mat crop = Mat.zeros(rgbaInnerWindow.size(),CvType.CV_8UC1);
 
 		switch (CameraActivity.viewMode) {
+		// if RGBA mode is selected no algorithm needs to run
 		case CameraActivity.VIEW_MODE_RGBA:
 			break;
-
 		case CameraActivity.VIEW_MODE_Recognition:
-			
-			rgbaInnerWindow = rgba.submat(top, top + height, left, left + width);
-			Mat gray1 = inputFrame.gray();
-			grayInnerWindow1 = gray1.submat(top, top + height, left, left + width);
-			
-			ArrayList<Mat> channels = new ArrayList<Mat>(3);
-			
-			Mat src1= Mat.zeros(rgbaInnerWindow.size(),CvType.CV_8UC3);
-			
-			Core.split(rgbaInnerWindow, channels);
-
+			// split the RGB image into R,G,B channels respectively
+			Core.split(rgba, channels);
+			// get only the spectrum of colors (threshold) that could be in a
+			// sign
 			Mat b = channels.get(0);
-			Imgproc.threshold(b, b, 0, 70, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			Imgproc.threshold(b, b, 90, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
 			Mat g = channels.get(1);
 			Imgproc.threshold(g, g, 0, 70, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
 			Mat r = channels.get(2);
-			Imgproc.threshold(r, r, 90, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
-
+			Imgproc.threshold(r, r, 0, 70, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			// put back thresholded channels into one RGB image
 			Core.merge(channels, src1);
+			// get rid of noise
 			Imgproc.medianBlur(src1, src1, 3);
+			// create gray image in order to further threshold the result
+			Imgproc.cvtColor(src1, gray1, Imgproc.COLOR_BGR2GRAY);
 
-			//Mat crop = Mat.zeros(rgbaInnerWindow.size(),CvType.CV_8UC1);
-			
-	
-			
-			
-			Imgproc.cvtColor(src1,grayInnerWindow1, Imgproc.COLOR_BGR2GRAY);
-			//Imgproc.threshold(grayInnerWindow1,grayInnerWindow1,0, 255, Imgproc.THRESH_BINARY);
-			
-			//Imgproc.threshold(grayInnerWindow1,grayInnerWindow1, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			Imgproc.threshold(gray1, gray1, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+			// find the region of interest - traffic signs by drawing lines
+			// (contours) around it
+			Imgproc.findContours(gray1, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 
-			//Imgproc.Canny(src1, src1, 0, 255);
-			
-			List<MatOfPoint>contours= new ArrayList<MatOfPoint>();
-		    Mat hierarchy = new Mat();
-		     Imgproc.findContours(grayInnerWindow1, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
-		
-		    for ( int contourIdx=0; contourIdx < contours.size(); contourIdx++ )
-		    {
-		        // Minimum size allowed for consideration
-		        MatOfPoint2f approxCurve = new MatOfPoint2f();
-		        MatOfPoint2f contour2f = new MatOfPoint2f( contours.get(contourIdx).toArray() );
-		        //Processing on mMOP2f1 which is in type MatOfPoint2f
-		        double approxDistance = Imgproc.arcLength(contour2f, true)*0.02;//0.02
-		        Imgproc.approxPolyDP(contour2f, approxCurve, approxDistance, true);
+			for (int contourIdx = 0; contourIdx < contours.size(); contourIdx++) {
+				// Minimum size allowed for consideration
+				MatOfPoint2f approxCurve = new MatOfPoint2f();
+				MatOfPoint2f contour2f = new MatOfPoint2f(contours.get(contourIdx).toArray());
+				// Processing on mMOP2f1 which is in type MatOfPoint2f
+				double approxDistance = Imgproc.arcLength(contour2f, true) * 0.02;// 0.02
+				Imgproc.approxPolyDP(contour2f, approxCurve, approxDistance, true);
 
-		        //Convert back to MatOfPoint
-		        MatOfPoint points = new MatOfPoint( approxCurve.toArray() );
-		       // Imgproc.drawContours(rgbaInnerWindow, contours, contourIdx, new Scalar(0,255,0));
-		        // Get bounding rect of contour
-		        Rect rect = Imgproc.boundingRect(points);
-		        double a = Imgproc.contourArea(contours.get(contourIdx));
-		        System.out.println(rect.height);
-		      // 
-		       
-				if (a >2000 && a < 8000) {
-		        Core.rectangle(rgbaInnerWindow, new Point(rect.x, rect.y), new Point(rect.x + rect.width, rect.y + rect.height)
-		        		, new Scalar(0,0,255), 3);//3
+				// Convert back to MatOfPoint
+				MatOfPoint points = new MatOfPoint(approxCurve.toArray());
+				// Get bounding rect of contour
+				Rect rect = Imgproc.boundingRect(points);
+				double a = Imgproc.contourArea(contours.get(contourIdx));
+
+				ratio = (double) rect.height / (double) rect.width;
+				// set maximum size and ratio of rect
+				if (a > 2000 && a < 8000 && ratio > 0.8 && ratio < 1.2) {
+					Core.rectangle(rgba, new Point(rect.x, rect.y),
+							new Point(rect.x + rect.width, rect.y + rect.height), new Scalar(0, 0, 255), 3);
 				}
-		    }
-			//Core.convertScaleAbs(src1, rgbaInnerWindow, 10, 0);
-			//Imgproc.cvtColor(src1, rgbaInnerWindow, Imgproc.COLOR_GRAY2BGRA, 4);
-
-			grayInnerWindow1.release();
-			rgbaInnerWindow.release();
+			}
 			break;
 		}
-
 		return rgba;
 	}
 }
