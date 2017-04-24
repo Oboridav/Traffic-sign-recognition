@@ -1,21 +1,33 @@
 package org.opencv.samples.imagemanipulations;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfByte;
+import org.opencv.core.MatOfDMatch;
+import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
+import org.opencv.features2d.DMatch;
+import org.opencv.features2d.DescriptorExtractor;
+import org.opencv.features2d.DescriptorMatcher;
+import org.opencv.features2d.FeatureDetector;
+import org.opencv.features2d.Features2d;
+import org.opencv.features2d.KeyPoint;
+import org.opencv.highgui.Highgui;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.imgproc.Imgproc;
@@ -141,7 +153,6 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 		Mat hierarchy = new Mat();
 
 		double ratio = 0;
-		// Mat crop = Mat.zeros(rgbaInnerWindow.size(),CvType.CV_8UC1);
 
 		switch (CameraActivity.viewMode) {
 		// if RGBA mode is selected no algorithm needs to run
@@ -161,13 +172,15 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 			// put back thresholded channels into one RGB image
 			Core.merge(channels, src1);
 			// get rid of noise
-			Imgproc.medianBlur(src1, src1, 3);
+			//Imgproc.medianBlur(src1, src1, 3);
 			// create gray image in order to further threshold the result
 			Imgproc.cvtColor(src1, gray1, Imgproc.COLOR_BGR2GRAY);
 
 			Imgproc.threshold(gray1, gray1, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
-			// find the region of interest - traffic signs by drawing lines
-			// (contours) around it
+			// find the region of interest - traffic signs by drawing lines (contours) around it
+			
+			//Imgproc.medianBlur(gray1, gray1, 3);
+			
 			Imgproc.findContours(gray1, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 
 			for (int contourIdx = 0; contourIdx < contours.size(); contourIdx++) {
@@ -186,12 +199,17 @@ public class CameraActivity extends Activity implements CvCameraViewListener2 {
 
 				ratio = (double) rect.height / (double) rect.width;
 				// set maximum size and ratio of rect
-				if (a > 2000 && a < 8000 && ratio > 0.8 && ratio < 1.2) {
+				if (a > 2500 && a < 6000 && ratio > 0.8 && ratio < 1.2) {
 					Core.rectangle(rgba, new Point(rect.x, rect.y),
 							new Point(rect.x + rect.width, rect.y + rect.height), new Scalar(0, 0, 255), 3);
+					// region of interest = possible sign
+					
+				
 				}
+
 			}
 			break;
+
 		}
 		return rgba;
 	}
